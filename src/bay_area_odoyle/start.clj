@@ -1,5 +1,6 @@
 (ns bay-area-odoyle.start
   (:require [bay-area-odoyle.core :as c]
+            [dungeon-crawler.core :as dungeon]
             [play-cljc.gl.core :as pc])
   (:import  [org.lwjgl.glfw GLFW Callbacks
              GLFWCursorPosCallbackI GLFWKeyCallbackI GLFWMouseButtonCallbackI
@@ -34,30 +35,42 @@
     (MemoryUtil/memFree *fb-height)
     (MemoryUtil/memFree *window-width)
     (MemoryUtil/memFree *window-height)
-    (swap! c/*state assoc :mouse-x x :mouse-y y)))
+    (let [show-hand? (dungeon/update-mouse-coords! x y)]
+      (GLFW/glfwSetCursor window
+        (GLFW/glfwCreateStandardCursor
+          (if show-hand?
+            GLFW/GLFW_HAND_CURSOR
+            GLFW/GLFW_ARROW_CURSOR))))))
 
 (defn on-mouse-click! [window button action mods]
-  (swap! c/*state assoc :mouse-button (when (= action GLFW/GLFW_PRESS)
-                                        (mousecode->keyword button))))
+  (dungeon/update-mouse-button! (if (= action GLFW/GLFW_PRESS)
+                                  (mousecode->keyword button)
+                                  :none)))
 
 (defn keycode->keyword [keycode]
   (condp = keycode
-    GLFW/GLFW_KEY_LEFT :left
-    GLFW/GLFW_KEY_RIGHT :right
-    GLFW/GLFW_KEY_UP :up
-    GLFW/GLFW_KEY_DOWN :down
+    GLFW/GLFW_KEY_LEFT :slide-left
+    GLFW/GLFW_KEY_A :left
+    GLFW/GLFW_KEY_RIGHT :slide-right
+    GLFW/GLFW_KEY_D :right
+    GLFW/GLFW_KEY_W :up
+    GLFW/GLFW_KEY_S :down
+    GLFW/GLFW_KEY_SPACE :space
     nil))
 
 (defn on-key! [window keycode scancode action mods]
   (when-let [k (keycode->keyword keycode)]
     (condp = action
-      GLFW/GLFW_PRESS (swap! c/*state update :pressed-keys conj k)
-      GLFW/GLFW_RELEASE (swap! c/*state update :pressed-keys disj k)
+      GLFW/GLFW_PRESS (do
+                        (c/on-key-press! k)
+                        (dungeon/update-pressed-keys! conj k))
+      GLFW/GLFW_RELEASE (dungeon/update-pressed-keys! disj k)
       nil)))
 
 (defn on-char! [window codepoint])
 
-(defn on-resize! [window width height])
+(defn on-resize! [window width height]
+  (dungeon/update-window-size! width height))
 
 (defn on-scroll! [window xoffset yoffset])
 
@@ -129,7 +142,7 @@
   (GLFW/glfwWindowHint GLFW/GLFW_CONTEXT_VERSION_MINOR 3)
   (GLFW/glfwWindowHint GLFW/GLFW_OPENGL_FORWARD_COMPAT GL33/GL_TRUE)
   (GLFW/glfwWindowHint GLFW/GLFW_OPENGL_PROFILE GLFW/GLFW_OPENGL_CORE_PROFILE)
-  (if-let [window (GLFW/glfwCreateWindow 1024 768 "Hello, world!" 0 0)]
+  (if-let [window (GLFW/glfwCreateWindow 960 600 "O'Doyle rules!" 0 0)]
     (do
       (GLFW/glfwMakeContextCurrent window)
       (GLFW/glfwSwapInterval 1)
